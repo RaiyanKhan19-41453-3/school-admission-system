@@ -1,0 +1,22 @@
+# build / deps
+**/bin/
+**/obj/
+node_modules/
+dist/
+*.user
+
+# local env / secrets
+.env
+.env.local
+
+# assignment PDF is confidential — never commit
+Asst_Software_Engineer_Project_Assignment.pdf
+*.pdf
+
+# editors / OS
+.vscode/
+.idea/
+.DS_Store
+
+# docker artefacts
+db_data/
