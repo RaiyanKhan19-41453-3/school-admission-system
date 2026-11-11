@@ -32,7 +32,11 @@ static string GetConnectionString()
                 Database = string.IsNullOrWhiteSpace(uri.AbsolutePath) ? "postgres" : uri.AbsolutePath.TrimStart('/'),
                 Username = Uri.UnescapeDataString(userInfo[0]),
                 Password = userInfo.Length > 1 ? Uri.UnescapeDataString(userInfo[1]) : "",
-                Pooling = false
+                // Pooled connections: reuse instead of new TCP+auth per request.
+                Pooling = true,
+                MinPoolSize = 2,
+                MaxPoolSize = 100,
+                ConnectionIdleLifetime = 300
             };
             return sb.ConnectionString;
         }
@@ -49,7 +53,8 @@ static string GetConnectionString()
     return new NpgsqlConnectionStringBuilder
     {
         Host = host, Port = int.TryParse(port, out var p) ? p : 5432,
-        Database = db, Username = user, Password = pass, Pooling = false
+        Database = db, Username = user, Password = pass,
+        Pooling = true, MinPoolSize = 2, MaxPoolSize = 100, ConnectionIdleLifetime = 300
     }.ConnectionString;
 }
 
@@ -120,12 +125,16 @@ async Task InitDbAsync()
 // Materialise EXPIRED rows (seat release). Read paths also treat
 // HELD+past-due as EXPIRED lazily, so seats free up instantly even
 // before the sweeper runs. This satisfies "no API call needed".
+// The existence check avoids a pointless UPDATE every 5s at idle.
 async Task SweepExpiredAsync(CancellationToken ct)
 {
     try
     {
         await using var conn = new NpgsqlConnection(GetConnectionString());
         await conn.OpenAsync(ct);
+        await using var check = new NpgsqlCommand(
+            "SELECT 1 FROM holds WHERE status='HELD' AND expires_at <= now() LIMIT 1", conn);
+        if (await check.ExecuteScalarAsync(ct) is null) return;
         await using var cmd = new NpgsqlCommand(
             "UPDATE holds SET status='EXPIRED', updated_at=now() WHERE status='HELD' AND expires_at <= now()", conn);
         await cmd.ExecuteNonQueryAsync(ct);
@@ -177,11 +186,15 @@ app.MapPost("/classes", async (CreateClassRequest? body) =>
 
 static async Task<List<object>> ListClassesAsync(string connStr)
 {
+    // One GROUP BY query instead of N+1 per-class COUNT subqueries.
     const string sql = """
         SELECT c.id, c.name, c.total_seats,
-               (SELECT COUNT(*) FROM holds h WHERE h.class_id=c.id AND h.status='CONFIRMED') AS confirmed,
-               (SELECT COUNT(*) FROM holds h WHERE h.class_id=c.id AND h.status='HELD' AND h.expires_at > now()) AS held
-        FROM classes c ORDER BY c.created_at ASC, c.id ASC
+               COALESCE(SUM(CASE WHEN h.status = 'CONFIRMED' THEN 1 ELSE 0 END), 0) AS confirmed,
+               COALESCE(SUM(CASE WHEN h.status = 'HELD' AND h.expires_at > now() THEN 1 ELSE 0 END), 0) AS held
+        FROM classes c
+        LEFT JOIN holds h ON h.class_id = c.id
+        GROUP BY c.id, c.name, c.total_seats
+        ORDER BY c.created_at ASC, c.id ASC
         """;
     var list = new List<object>();
     await using var conn = new NpgsqlConnection(connStr);
@@ -211,11 +224,15 @@ app.MapGet("/classes", async () => Results.Ok(await ListClassesAsync(GetConnecti
 
 app.MapGet("/classes/{classId}", async (string classId) =>
 {
+    // Same single GROUP BY query, filtered to one class.
     const string sql = """
         SELECT c.id, c.name, c.total_seats,
-               (SELECT COUNT(*) FROM holds h WHERE h.class_id=c.id AND h.status='CONFIRMED') AS confirmed,
-               (SELECT COUNT(*) FROM holds h WHERE h.class_id=c.id AND h.status='HELD' AND h.expires_at > now()) AS held
-        FROM classes c WHERE c.id=@id
+               COALESCE(SUM(CASE WHEN h.status = 'CONFIRMED' THEN 1 ELSE 0 END), 0) AS confirmed,
+               COALESCE(SUM(CASE WHEN h.status = 'HELD' AND h.expires_at > now() THEN 1 ELSE 0 END), 0) AS held
+        FROM classes c
+        LEFT JOIN holds h ON h.class_id = c.id
+        WHERE c.id = @id
+        GROUP BY c.id, c.name, c.total_seats
         """;
     await using var conn = new NpgsqlConnection(GetConnectionString());
     await conn.OpenAsync();

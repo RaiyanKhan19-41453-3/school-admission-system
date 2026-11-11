@@ -71,6 +71,21 @@ Frontend:
 cd frontend && npm install && npm test
 ```
 
+## Performance notes
+
+Three production-readiness choices (all safe — no API/contract change):
+
+1. **Connection pooling** — `Pooling=true` (Min 2 / Max 100) so requests
+   reuse connections instead of a new TCP+auth handshake each time.
+2. **Single seat-count query** — `GET /classes` uses one `LEFT JOIN` +
+   `GROUP BY` with conditional sums instead of N+1 per-class subqueries.
+3. **Smarter expiry sweeper** — checks `SELECT 1 ... LIMIT 1` before the
+   `UPDATE`, so it does no write when nothing is expired.
+
+Deliberately **not** added: caching (would risk stale seat counts),
+WebSocket (polling every few seconds satisfies the brief), rate limiting
+(a tight limit would break the 30-parallel concurrency test).
+
 ## API (brief contract)
 
 | Method | Path | Header | Success |
