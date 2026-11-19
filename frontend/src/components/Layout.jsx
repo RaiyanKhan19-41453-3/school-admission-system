@@ -4,14 +4,16 @@ import { IconSchool, IconLogout, IconMoon, IconSun } from '@tabler/icons-react'
 import { Link, NavLink as RouterNavLink, useNavigate } from 'react-router-dom'
 import { getToken, setToken, apiFetch } from '../api.js'
 
-export default function Layout({ profile, setProfile, children }) {
+export default function Layout({ profile, setProfile, onLogout, children }) {
   const [opened, { toggle }] = useDisclosure()
   const navigate = useNavigate()
   const { colorScheme, toggleColorScheme } = useMantineColorScheme()
   const token = getToken()
 
-  async function logout() {
-    setToken(null); setProfile(null); navigate('/login')
+  function logout() {
+    if (onLogout) onLogout()
+    else { setToken(null); setProfile(null) }
+    navigate('/login', { replace: true })
   }
 
   return (

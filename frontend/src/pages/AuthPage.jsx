@@ -2,9 +2,9 @@ import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { Paper, Title, Text, TextInput, PasswordInput, Button, Alert, Stack, Anchor } from '@mantine/core'
 import { IconLogin, IconUserPlus, IconAlertCircle } from '@tabler/icons-react'
-import { apiFetch, friendlyMessage, setToken } from '../api.js'
+import { apiFetch, friendlyMessage } from '../api.js'
 
-export default function AuthPage({ mode }) {
+export default function AuthPage({ mode, onAuthenticated, onProfile }) {
   const navigate = useNavigate()
   const isLogin = mode === 'login'
   const [form, setForm] = useState({ nid: '', password: '', fullName: '' })
@@ -19,8 +19,11 @@ export default function AuthPage({ mode }) {
         : { nid: form.nid, password: form.password, fullName: form.fullName }
       const r = await apiFetch(isLogin ? '/api/auth/login' : '/api/auth/register',
         { method: 'POST', body, token: null })
-      setToken(r.token)
-      navigate(r.role === 'Admin' ? '/admin' : '/parent')
+      onAuthenticated(r.token)
+      // Wait for the profile to load before navigating, so ProtectedRoute sees the role.
+      const me = await apiFetch('/api/auth/me', { token: r.token })
+      onProfile(me)
+      navigate(me.role === 'Admin' ? '/admin' : '/parent', { replace: true })
     } catch (e) { setErr(friendlyMessage(e)) } finally { setBusy(false) }
   }
 
@@ -38,9 +41,9 @@ export default function AuthPage({ mode }) {
           <form onSubmit={submit}>
             <Stack gap="sm">
               <TextInput
-                label="Birth certificate number" placeholder="17-digit NID" required
+                label="NID / Admin ID" placeholder="17-digit NID or Admin ID" required
                 value={form.nid} maxLength={17}
-                onChange={e => setForm({ ...form, nid: e.target.value.replace(/\D/g, '').slice(0, 17) })} />
+                onChange={e => setForm({ ...form, nid: e.target.value.slice(0, 17) })} />
               {!isLogin && <TextInput label="Full name" placeholder="Your full name" required
                 value={form.fullName} onChange={e => setForm({ ...form, fullName: e.target.value })} />}
               <PasswordInput label="Password" placeholder="At least 6 characters" required

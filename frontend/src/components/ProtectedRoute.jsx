@@ -1,9 +1,9 @@
-import { Navigate, Outlet } from 'react-router-dom'
-import { getToken } from '../api.js'
+import { Navigate } from 'react-router-dom'
+import { Center, Loader } from '@mantine/core'
 
-export default function ProtectedRoute({ profile, role, children }) {
-  const token = getToken()
+export default function ProtectedRoute({ token, profile, loading, role, children }) {
+  if (loading) return <Center h="100vh"><Loader color="blue" /></Center>
   if (!token) return <Navigate to="/login" replace />
-  if (role && profile?.role !== role) return <Navigate to="/" replace />
-  return children || <Outlet />
+  if (role && profile?.role !== role) return <Navigate to="/login" replace />
+  return children
 }
