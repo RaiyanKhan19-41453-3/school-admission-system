@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Link, Navigate, Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes } from 'react-router-dom'
+import { Title, Text, Group, Button } from '@mantine/core'
+import { Link } from 'react-router-dom'
 import { apiFetch, getToken } from './api.js'
 import Layout from './components/Layout.jsx'
 import ProtectedRoute from './components/ProtectedRoute.jsx'
@@ -32,11 +34,11 @@ export default function App() {
       <Route path="/" element={
         getToken()
           ? <Navigate to={profile?.role === 'Admin' ? '/admin' : '/parent'} replace />
-          : <div className="auth-wrap"><div className="card">
-              <h1>School Admission System</h1>
-              <p className="muted">First come, first served admission with time-limited seat holds.</p>
-              <div className="row"><Link to="/login" className="btn-sm">Sign in</Link><Link to="/register">Register</Link></div>
-            </div></div>
+          : <div style={{ maxWidth: 520, margin: '60px auto', textAlign: 'center' }}>
+              <Title order={1} mb="md">School Admission System</Title>
+              <Text c="dimmed" mb="lg">First come, first served admission with time-limited seat holds.</Text>
+              <Group justify="center"><Button component={Link} to="/login">Sign in</Button><Button component={Link} to="/register" variant="light">Register</Button></Group>
+            </div>
       } />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

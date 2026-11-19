@@ -1,27 +1,43 @@
 import { useEffect, useState } from 'react'
+import {
+  Title, Text, Tabs, SimpleGrid, Paper, Group, Badge, Button, Table,
+  TextInput, NumberInput, Alert, Stack, Progress, ThemeIcon,
+} from '@mantine/core'
+import {
+  IconChartBar, IconCalendar, IconBook2, IconList, IconUsers, IconCheck,
+  IconAlertCircle, IconPlus,
+} from '@tabler/icons-react'
 import { apiFetch, friendlyMessage } from '../api.js'
 
 const money = n => 'TK ' + Number(n).toLocaleString()
 
+function Stat({ label, value, icon, color = 'blue' }) {
+  return (
+    <Paper p="md" withBorder radius="md">
+      <Group justify="space-between">
+        <div><Text size="xs" c="dimmed" tt="uppercase" fw={700}>{label}</Text><Text size="xl" fw={700} mt={4}>{value}</Text></div>
+        <ThemeIcon color={color} variant="light" size="lg">{icon}</ThemeIcon>
+      </Group>
+    </Paper>
+  )
+}
+
 export default function AdminPage() {
   const [tab, setTab] = useState('overview')
-  const [dash, setDash] = useState(null)
-  const [years, setYears] = useState([])
-  const [classes, setClasses] = useState([])
-  const [apps, setApps] = useState(null)
-  const [students, setStudents] = useState(null)
+  const [data, setData] = useState({})
   const [form, setForm] = useState({})
   const [banner, setBanner] = useState('')
   const [notice, setNotice] = useState('')
 
+  const endpoint = {
+    overview: '/api/admin/dashboard', years: '/api/admin/years',
+    classes: '/api/admin/classes', applications: '/api/admin/applications',
+    students: '/api/admin/students',
+  }[tab]
+
   const load = async () => {
-    try {
-      if (tab === 'overview') setDash(await apiFetch('/api/admin/dashboard'))
-      if (tab === 'years') setYears(await apiFetch('/api/admin/years'))
-      if (tab === 'classes') setClasses(await apiFetch('/api/admin/classes'))
-      if (tab === 'applications') setApps(await apiFetch('/api/admin/applications'))
-      if (tab === 'students') setStudents(await apiFetch('/api/admin/students'))
-    } catch (e) { setBanner(friendlyMessage(e)) }
+    try { setData({ [tab]: await apiFetch(endpoint) }) }
+    catch (e) { setBanner(friendlyMessage(e)) }
   }
   useEffect(() => { load() }, [tab])
 
@@ -31,98 +47,128 @@ export default function AdminPage() {
     catch (e) { setBanner(friendlyMessage(e)) }
   }
 
+  const dash = data.overview
+  const years = data.years || []
+  const classes = data.classes || []
+  const apps = data.applications
+  const students = data.students
+
   return (
-    <div>
-      <h1>Admin dashboard</h1>
-      <div className="tabs">
-        {['overview', 'years', 'classes', 'applications', 'students'].map(t =>
-          <button key={t} type="button" className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>{t}</button>)}
-      </div>
-      {banner && <div className="alert error">{banner}</div>}
-      {notice && <div className="alert ok">{notice}</div>}
+    <Stack gap="lg">
+      <Title order={1}>Admin dashboard</Title>
+      {banner && <Alert color="red" icon={<IconAlertCircle size={16} />}>{banner}</Alert>}
+      {notice && <Alert color="green" icon={<IconCheck size={16} />}>{notice}</Alert>}
 
-      {tab === 'overview' && dash && (
-        <div className="stats">
-          <div className="stat"><small>Active year</small><strong>{dash.activeYear}</strong></div>
-          <div className="stat"><small>Classes</small><strong>{dash.activeClasses}</strong></div>
-          <div className="stat"><small>Seats filled</small><strong>{dash.seatsFilled}/{dash.totalSeats}</strong></div>
-          <div className="stat"><small>Confirmed</small><strong>{dash.confirmedApplications}</strong></div>
-          <div className="stat"><small>Held</small><strong>{dash.heldApplications}</strong></div>
-          <div className="stat"><small>Revenue</small><strong>{money(dash.revenueCollected)}</strong></div>
-        </div>
-      )}
+      <Tabs value={tab} onChange={setTab} variant="pills" radius="md">
+        <Tabs.List>
+          <Tabs.Tab value="overview" leftSection={<IconChartBar size={16} />}>Overview</Tabs.Tab>
+          <Tabs.Tab value="years" leftSection={<IconCalendar size={16} />}>Years</Tabs.Tab>
+          <Tabs.Tab value="classes" leftSection={<IconBook2 size={16} />}>Classes</Tabs.Tab>
+          <Tabs.Tab value="applications" leftSection={<IconList size={16} />}>Applications</Tabs.Tab>
+          <Tabs.Tab value="students" leftSection={<IconUsers size={16} />}>Students</Tabs.Tab>
+        </Tabs.List>
 
-      {tab === 'years' && (
-        <div className="card">
-          <h3>Create academic year</h3>
-          <div className="row">
-            <input placeholder="2027-2028" value={form.name || ''} onChange={e => setForm({ ...form, name: e.target.value })} />
-            <input type="date" value={form.startDate || ''} onChange={e => setForm({ ...form, startDate: e.target.value })} />
-            <input type="date" value={form.endDate || ''} onChange={e => setForm({ ...form, endDate: e.target.value })} />
-            <button onClick={() => action('/api/admin/years', 'POST', {
-              name: form.name, startDate: form.startDate, endDate: form.endDate })}>Create</button>
-          </div>
-          {years.map(y => (
-            <div key={y.id} className="hold">
-              <span><strong>{y.name}</strong> {y.isActive && <span className="badge confirmed">ACTIVE</span>} · {y.classCount} classes</span>
-              {!y.isActive && <button onClick={() => action(`/api/admin/years/${y.id}/activate`, 'PUT')}>Activate</button>}
-            </div>
-          ))}
-        </div>
-      )}
+        <Tabs.Panel value="overview" pt="md">
+          {dash ? (
+            <SimpleGrid cols={{ base: 2, sm: 3, lg: 4 }} spacing="md">
+              <Stat label="Active year" value={dash.activeYear} icon={<IconCalendar size={20} />} />
+              <Stat label="Classes" value={dash.activeClasses} icon={<IconBook2 size={20} />} />
+              <Stat label="Seats filled" value={`${dash.seatsFilled}/${dash.totalSeats}`} icon={<IconUsers size={20} />} color="cyan" />
+              <Stat label="Confirmed" value={dash.confirmedApplications} icon={<IconCheck size={20} />} color="green" />
+              <Stat label="Held" value={dash.heldApplications} icon={<IconList size={20} />} color="yellow" />
+              <Stat label="Expired" value={dash.expiredApplications} icon={<IconAlertCircle size={20} />} color="red" />
+              <Stat label="Revenue" value={money(dash.revenueCollected)} icon={<IconChartBar size={20} />} color="grape" />
+              <Stat label="Students" value={dash.totalStudents} icon={<IconUsers size={20} />} color="teal" />
+            </SimpleGrid>
+          ) : <Text c="dimmed">Loading…</Text>}
+        </Tabs.Panel>
 
-      {tab === 'classes' && (
-        <div className="card">
-          <h3>Create class / shift</h3>
-          <div className="row">
-            <input placeholder="Name (e.g. Class 6)" value={form.name || ''} onChange={e => setForm({ ...form, name: e.target.value })} />
-            <input placeholder="Grade" value={form.grade || ''} onChange={e => setForm({ ...form, grade: e.target.value })} />
-            <input placeholder="Shift" value={form.shift || ''} onChange={e => setForm({ ...form, shift: e.target.value })} />
-            <input placeholder="Seats" type="number" value={form.totalSeats || ''} onChange={e => setForm({ ...form, totalSeats: e.target.value })} />
-            <input placeholder="Fee" type="number" value={form.feeAmount || ''} onChange={e => setForm({ ...form, feeAmount: e.target.value })} />
-            <button onClick={() => action('/api/admin/classes', 'POST', {
-              name: form.name, grade: form.grade, shift: form.shift,
-              totalSeats: Number(form.totalSeats), feeAmount: Number(form.feeAmount) })}>Create</button>
-          </div>
-          <table className="data-table">
-            <thead><tr><th>Class</th><th>Grade</th><th>Shift</th><th>Seats</th><th>Fee</th><th>Available</th></tr></thead>
-            <tbody>
-              {classes.map(c => (
-                <tr key={c.id}><td>{c.name}</td><td>{c.grade}</td><td>{c.shift}</td><td>{c.totalSeats}</td><td>{money(c.feeAmount)}</td><td>{c.availableSeats}</td></tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+        <Tabs.Panel value="years" pt="md">
+          <Paper p="md" withBorder radius="md" mb="md">
+            <Title order={4} mb="sm">Create academic year</Title>
+            <Group align="flex-end">
+              <TextInput label="Name" placeholder="2027-2028" value={form.name || ''} onChange={e => setForm({ ...form, name: e.target.value })} />
+              <TextInput label="Start date" type="date" value={form.startDate || ''} onChange={e => setForm({ ...form, startDate: e.target.value })} />
+              <TextInput label="End date" type="date" value={form.endDate || ''} onChange={e => setForm({ ...form, endDate: e.target.value })} />
+              <Button leftSection={<IconPlus size={15} />} onClick={() => action('/api/admin/years', 'POST', {
+                name: form.name, startDate: form.startDate, endDate: form.endDate })}>Create</Button>
+            </Group>
+          </Paper>
+          <Stack gap="xs">
+            {years.map(y => (
+              <Paper key={y.id} p="sm" withBorder radius="md">
+                <Group justify="space-between">
+                  <Group><Text fw={600}>{y.name}</Text>{y.isActive && <Badge color="green">ACTIVE</Badge>}<Text size="sm" c="dimmed">{y.classCount} classes</Text></Group>
+                  {!y.isActive && <Button size="xs" variant="light" onClick={() => action(`/api/admin/years/${y.id}/activate`, 'PUT')}>Activate</Button>}
+                </Group>
+              </Paper>
+            ))}
+          </Stack>
+        </Tabs.Panel>
 
-      {tab === 'applications' && apps && (
-        <div className="card">
-          <h3>All applications ({apps.total})</h3>
-          <table className="data-table">
-            <thead><tr><th>Class</th><th>Student</th><th>NID</th><th>Status</th><th>Ref</th></tr></thead>
-            <tbody>
-              {apps.items.map(a => (
-                <tr key={a.holdId}><td>{a.className}</td><td>{a.studentName}</td><td>{a.studentNid}</td>
-                  <td><span className={`badge ${a.status.toLowerCase()}`}>{a.status}</span></td><td>{a.transactionRef || '-'}</td></tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+        <Tabs.Panel value="classes" pt="md">
+          <Paper p="md" withBorder radius="md" mb="md">
+            <Title order={4} mb="sm">Create class / shift</Title>
+            <Group align="flex-end" wrap="wrap">
+              <TextInput label="Name" placeholder="Class 6" value={form.name || ''} onChange={e => setForm({ ...form, name: e.target.value })} />
+              <TextInput label="Grade" placeholder="Class 6" value={form.grade || ''} onChange={e => setForm({ ...form, grade: e.target.value })} />
+              <TextInput label="Shift" placeholder="Morning" value={form.shift || ''} onChange={e => setForm({ ...form, shift: e.target.value })} />
+              <NumberInput label="Seats" min={1} value={form.totalSeats || 0} onChange={v => setForm({ ...form, totalSeats: v })} />
+              <NumberInput label="Fee" min={0} value={form.feeAmount || 0} onChange={v => setForm({ ...form, feeAmount: v })} />
+              <Button leftSection={<IconPlus size={15} />} onClick={() => action('/api/admin/classes', 'POST', {
+                name: form.name, grade: form.grade, shift: form.shift,
+                totalSeats: Number(form.totalSeats), feeAmount: Number(form.feeAmount) })}>Create</Button>
+            </Group>
+          </Paper>
+          <Paper withBorder radius="md" p="md">
+            <Table striped highlightOnHover>
+              <Table.Thead><Table.Tr><Table.Th>Class</Table.Th><Table.Th>Grade</Table.Th><Table.Th>Shift</Table.Th><Table.Th>Seats</Table.Th><Table.Th>Fee</Table.Th><Table.Th>Available</Table.Th></Table.Tr></Table.Thead>
+              <Table.Tbody>
+                {classes.map(c => (
+                  <Table.Tr key={c.id}>
+                    <Table.Td fw={600}>{c.name}</Table.Td><Table.Td>{c.grade}</Table.Td><Table.Td>{c.shift}</Table.Td>
+                    <Table.Td>{c.totalSeats}</Table.Td><Table.Td>{money(c.feeAmount)}</Table.Td><Table.Td>{c.availableSeats}</Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+          </Paper>
+        </Tabs.Panel>
 
-      {tab === 'students' && students && (
-        <div className="card">
-          <h3>Students ({students.total})</h3>
-          <table className="data-table">
-            <thead><tr><th>Name</th><th>NID</th><th>Role</th><th>Apps</th></tr></thead>
-            <tbody>
-              {students.items.map(s => (
-                <tr key={s.id}><td>{s.fullName}</td><td>{s.nid}</td><td>{s.role}</td><td>{s.totalApplications}</td></tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
+        <Tabs.Panel value="applications" pt="md">
+          <Paper withBorder radius="md" p="md">
+            <Title order={4} mb="sm">All applications ({apps?.total ?? 0})</Title>
+            <Table striped highlightOnHover>
+              <Table.Thead><Table.Tr><Table.Th>Class</Table.Th><Table.Th>Student</Table.Th><Table.Th>NID</Table.Th><Table.Th>Status</Table.Th><Table.Th>Ref</Table.Th></Table.Tr></Table.Thead>
+              <Table.Tbody>
+                {(apps?.items || []).map(a => (
+                  <Table.Tr key={a.holdId}>
+                    <Table.Td>{a.className}</Table.Td><Table.Td>{a.studentName}</Table.Td><Table.Td>{a.studentNid}</Table.Td>
+                    <Table.Td><Badge color={{ HELD: 'yellow', CONFIRMED: 'green', EXPIRED: 'red', CANCELLED: 'gray' }[a.status]}>{a.status}</Badge></Table.Td>
+                    <Table.Td>{a.transactionRef || '-'}</Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+          </Paper>
+        </Tabs.Panel>
+
+        <Tabs.Panel value="students" pt="md">
+          <Paper withBorder radius="md" p="md">
+            <Title order={4} mb="sm">Students ({students?.total ?? 0})</Title>
+            <Table striped highlightOnHover>
+              <Table.Thead><Table.Tr><Table.Th>Name</Table.Th><Table.Th>NID</Table.Th><Table.Th>Role</Table.Th><Table.Th>Apps</Table.Th></Table.Tr></Table.Thead>
+              <Table.Tbody>
+                {(students?.items || []).map(s => (
+                  <Table.Tr key={s.id}>
+                    <Table.Td>{s.fullName}</Table.Td><Table.Td>{s.nid}</Table.Td><Table.Td><Badge variant="light">{s.role}</Badge></Table.Td><Table.Td>{s.totalApplications}</Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+          </Paper>
+        </Tabs.Panel>
+      </Tabs>
+    </Stack>
   )
 }

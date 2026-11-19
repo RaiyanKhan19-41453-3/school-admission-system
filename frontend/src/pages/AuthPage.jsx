@@ -1,5 +1,7 @@
-import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useState } from 'react'
+import { useNavigate, Link } from 'react-router-dom'
+import { Paper, Title, Text, TextInput, PasswordInput, Button, Alert, Stack, Anchor } from '@mantine/core'
+import { IconLogin, IconUserPlus, IconAlertCircle } from '@tabler/icons-react'
 import { apiFetch, friendlyMessage, setToken } from '../api.js'
 
 export default function AuthPage({ mode }) {
@@ -23,28 +25,38 @@ export default function AuthPage({ mode }) {
   }
 
   return (
-    <div className="auth-wrap">
-      <form className="card auth-card" onSubmit={submit}>
-        <h1>{isLogin ? 'Welcome back' : 'Create your account'}</h1>
-        <p className="muted">{isLogin ? 'Sign in to apply for admission.' : 'Register with your birth certificate number.'}</p>
-        {err && <div className="alert error">{err}</div>}
-        <label className="label">Birth certificate number (17 digits)</label>
-        <input placeholder="17-digit NID" value={form.nid}
-          onChange={e => setForm({ ...form, nid: e.target.value.replace(/\D/g, '').slice(0, 17) })} />
-        {!isLogin && <>
-          <label className="label">Full name</label>
-          <input placeholder="Your full name" value={form.fullName}
-            onChange={e => setForm({ ...form, fullName: e.target.value })} />
-        </>}
-        <label className="label">Password</label>
-        <input type="password" placeholder="At least 6 characters" value={form.password}
-          onChange={e => setForm({ ...form, password: e.target.value })} />
-        <button disabled={busy} type="submit">{isLogin ? 'Sign in' : 'Create account'}</button>
-        <p className="muted">
-          {isLogin ? <>No account? <Link to="/register">Register</Link></>
-                   : <>Already registered? <Link to="/login">Sign in</Link></>}
-        </p>
-      </form>
+    <div style={{ maxWidth: 440, margin: '40px auto' }}>
+      <Paper shadow="md" radius="lg" p="xl" withBorder>
+        <Stack gap="md">
+          <div>
+            <Title order={2}>{isLogin ? 'Welcome back' : 'Create your account'}</Title>
+            <Text c="dimmed" size="sm" mt={4}>
+              {isLogin ? 'Sign in to apply for admission.' : 'Register with your birth certificate number.'}
+            </Text>
+          </div>
+          {err && <Alert color="red" icon={<IconAlertCircle size={16} />}>{err}</Alert>}
+          <form onSubmit={submit}>
+            <Stack gap="sm">
+              <TextInput
+                label="Birth certificate number" placeholder="17-digit NID" required
+                value={form.nid} maxLength={17}
+                onChange={e => setForm({ ...form, nid: e.target.value.replace(/\D/g, '').slice(0, 17) })} />
+              {!isLogin && <TextInput label="Full name" placeholder="Your full name" required
+                value={form.fullName} onChange={e => setForm({ ...form, fullName: e.target.value })} />}
+              <PasswordInput label="Password" placeholder="At least 6 characters" required
+                value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} />
+              <Button type="submit" fullWidth loading={busy}
+                leftSection={isLogin ? <IconLogin size={16} /> : <IconUserPlus size={16} />}>
+                {isLogin ? 'Sign in' : 'Create account'}
+              </Button>
+            </Stack>
+          </form>
+          <Text size="sm" c="dimmed" ta="center">
+            {isLogin ? <>No account? <Anchor component={Link} to="/register">Register</Anchor></>
+                     : <>Already registered? <Anchor component={Link} to="/login">Sign in</Anchor></>}
+          </Text>
+        </Stack>
+      </Paper>
     </div>
   )
 }
