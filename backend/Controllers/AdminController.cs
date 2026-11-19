@@ -51,6 +51,31 @@ public sealed class AdminController(IAdmissionService svc, IAuthService auth) : 
     [HttpGet("dashboard")]
     public async Task<IActionResult> Dashboard() => Ok(await svc.GetDashboardAsync());
 
+    [HttpGet("analytics")]
+    public async Task<IActionResult> Analytics() => Ok(await svc.GetAnalyticsAsync());
+
+    // ── exports ──
+    [HttpGet("applications/export")]
+    [AllowAnonymous]
+    public async Task<IActionResult> ExportApplications([FromQuery] string? status, [FromQuery] string? classId,
+                                                        [FromQuery] string? token)
+    {
+        if (DownloadToken.Validate(token, HttpContext.RequestServices.GetRequiredService<IConfiguration>()) is null)
+            return Unauthorized();
+        var bytes = await svc.ExportApplicationsCsvAsync(status, classId);
+        return File(bytes, "text/csv", $"applications_{DateTime.UtcNow:yyyyMMdd}.csv");
+    }
+
+    [HttpGet("students/export")]
+    [AllowAnonymous]
+    public async Task<IActionResult> ExportStudents([FromQuery] string? token)
+    {
+        if (DownloadToken.Validate(token, HttpContext.RequestServices.GetRequiredService<IConfiguration>()) is null)
+            return Unauthorized();
+        var bytes = await svc.ExportStudentsCsvAsync();
+        return File(bytes, "text/csv", $"students_{DateTime.UtcNow:yyyyMMdd}.csv");
+    }
+
     // ── students ──
     [HttpGet("students")]
     public async Task<IActionResult> Students([FromQuery] int page = 1, [FromQuery] int pageSize = 20,

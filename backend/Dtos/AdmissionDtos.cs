@@ -107,6 +107,13 @@ public record ApplicationDetailResponse(
 public record DocumentResponse(
     string Id, string DocumentType, string FileName, long FileSize, DateTime UploadedAt);
 
+public record AnalyticsResponse(
+    List<ClassSeatRow> SeatsPerClass,
+    Dictionary<string, int> ApplicationsByStatus,
+    Dictionary<string, decimal> RevenueByMethod);
+
+public record ClassSeatRow(string ClassName, int Total, int Held, int Confirmed, int Available);
+
 // ── Shared ───────────────────────────────────────────────────────────────────
 public record PagedResponse<T>(IReadOnlyList<T> Items, int Page, int PageSize, int Total);
 public record ErrorResponse(string Code, string Message);

@@ -26,4 +26,9 @@ public interface IAdmissionService
 
     // insights
     Task<DashboardResponse> GetDashboardAsync();
+
+    // export
+    Task<byte[]> ExportApplicationsCsvAsync(string? status, string? classId);
+    Task<byte[]> ExportStudentsCsvAsync();
+    Task<AnalyticsResponse> GetAnalyticsAsync();
 }

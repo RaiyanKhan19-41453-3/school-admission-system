@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
 import {
   Title, Text, Tabs, SimpleGrid, Paper, Group, Badge, Button, Table,
-  TextInput, NumberInput, Alert, Stack, Modal, Divider,
+  TextInput, NumberInput, Alert, Stack, Modal, Divider, Progress, ThemeIcon,
 } from '@mantine/core'
 import {
   IconChartBar, IconCalendar, IconBook2, IconList, IconUsers, IconCheck,
   IconAlertCircle, IconPlus,
 } from '@tabler/icons-react'
-import { apiFetch, friendlyMessage } from '../api.js'
+import { apiFetch, friendlyMessage, API_BASE, getToken } from '../api.js'
 
 const money = n => 'TK ' + Number(n).toLocaleString()
 
@@ -30,6 +30,7 @@ export default function AdminPage() {
   const [notice, setNotice] = useState('')
   const [detailFor, setDetailFor] = useState(null)
   const [detail, setDetail] = useState(null)
+  const [analytics, setAnalytics] = useState(null)
 
   const endpoint = {
     overview: '/api/admin/dashboard', years: '/api/admin/years',
@@ -38,8 +39,10 @@ export default function AdminPage() {
   }[tab]
 
   const load = async () => {
-    try { setData({ [tab]: await apiFetch(endpoint) }) }
-    catch (e) { setBanner(friendlyMessage(e)) }
+    try {
+      setData({ [tab]: await apiFetch(endpoint) })
+      if (tab === 'overview') setAnalytics(await apiFetch('/api/admin/analytics'))
+    } catch (e) { setBanner(friendlyMessage(e)) }
   }
   useEffect(() => { load() }, [tab])
 
@@ -83,6 +86,28 @@ export default function AdminPage() {
               <Stat label="Students" value={dash.totalStudents} icon={<IconUsers size={20} />} color="teal" />
             </SimpleGrid>
           ) : <Text c="dimmed">Loading…</Text>}
+          {analytics && <>
+            <Divider label="Seats per class" labelPosition="left" my="lg" />
+            <Paper p="md" withBorder radius="md">
+              <Stack gap="xs">
+                {analytics.seatsPerClass.map(c => {
+                  const pct = c.total ? ((c.held + c.confirmed) / c.total) * 100 : 0
+                  return <div key={c.className}>
+                    <Group justify="space-between" mb={4}>
+                      <Text size="sm">{c.className}</Text>
+                      <Text size="xs" c="dimmed">{c.held + c.confirmed}/{c.total} filled</Text>
+                    </Group>
+                    <Progress value={pct} color={pct >= 100 ? 'red' : 'blue'} size="sm" />
+                  </div>
+                })}
+              </Stack>
+            </Paper>
+            <Divider label="Applications by status" labelPosition="left" my="lg" />
+            <SimpleGrid cols={{ base: 2, sm: 4 }} spacing="md">
+              {Object.entries(analytics.applicationsByStatus).map(([k, v]) =>
+                <Paper key={k} p="sm" withBorder radius="md"><Text size="xs" c="dimmed">{k}</Text><Text fw={700} size="lg">{v}</Text></Paper>)}
+            </SimpleGrid>
+          </>}
         </Tabs.Panel>
 
         <Tabs.Panel value="years" pt="md">
@@ -139,7 +164,12 @@ export default function AdminPage() {
 
         <Tabs.Panel value="applications" pt="md">
           <Paper withBorder radius="md" p="md">
-            <Title order={4} mb="sm">All applications ({apps?.total ?? 0})</Title>
+            <Group justify="space-between" mb="sm">
+              <Title order={4}>All applications ({apps?.total ?? 0})</Title>
+              <Button size="xs" variant="light" component="a"
+                href={`${API_BASE}/api/admin/applications/export?token=${encodeURIComponent(getToken() || '')}`}
+                download>Export CSV</Button>
+            </Group>
             <Table striped highlightOnHover>
               <Table.Thead><Table.Tr><Table.Th>Class</Table.Th><Table.Th>Student</Table.Th><Table.Th>NID</Table.Th><Table.Th>Status</Table.Th><Table.Th>Ref</Table.Th><Table.Th></Table.Th></Table.Tr></Table.Thead>
               <Table.Tbody>
@@ -162,7 +192,12 @@ export default function AdminPage() {
 
         <Tabs.Panel value="students" pt="md">
           <Paper withBorder radius="md" p="md">
-            <Title order={4} mb="sm">Students ({students?.total ?? 0})</Title>
+            <Group justify="space-between" mb="sm">
+              <Title order={4}>Students ({students?.total ?? 0})</Title>
+              <Button size="xs" variant="light" component="a"
+                href={`${API_BASE}/api/admin/students/export?token=${encodeURIComponent(getToken() || '')}`}
+                download>Export CSV</Button>
+            </Group>
             <Table striped highlightOnHover>
               <Table.Thead><Table.Tr><Table.Th>Name</Table.Th><Table.Th>NID</Table.Th><Table.Th>Role</Table.Th><Table.Th>Apps</Table.Th></Table.Tr></Table.Thead>
               <Table.Tbody>

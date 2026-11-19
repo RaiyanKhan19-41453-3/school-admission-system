@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text;
 using Admissions.Data;
 using Admissions.Dtos;
 using Admissions.Models;
@@ -292,5 +294,84 @@ public sealed class AdmissionService(
         return new DashboardResponse(
             activeYear?.Name ?? "None", activeClasses, totalSeats, held + confirmed,
             held, confirmed, expired, studentCount, revenue);
+    }
+
+    // ── CSV export ───────────────────────────────────────────────────────────
+    static string Csv(string value)
+    {
+        var v = value ?? "";
+        return v.Contains(',') || v.Contains('"') || v.Contains('\n')
+            ? "\"" + v.Replace("\"", "\"\"") + "\"" : v;
+    }
+
+    static byte[] ToCsv(IEnumerable<string[]> rows)
+    {
+        var sb = new StringBuilder();
+        foreach (var row in rows)
+            sb.AppendLine(string.Join(",", row.Select(Csv)));
+        // BOM so Excel opens UTF-8 correctly
+        var bytes = Encoding.UTF8.GetBytes(sb.ToString());
+        var withBom = new byte[bytes.Length + 3];
+        withBom[0] = 0xEF; withBom[1] = 0xBB; withBom[2] = 0xBF;
+        Array.Copy(bytes, 0, withBom, 3, bytes.Length);
+        return withBom;
+    }
+
+    public async Task<byte[]> ExportApplicationsCsvAsync(string? status, string? classId)
+    {
+        var filter = new ApplicationFilter(status, classId, 1, int.MaxValue);
+        var all = await holds.GetAllAsync(filter);
+        var now = DateTime.UtcNow;
+        var rows = new List<string[]>
+        {
+            new[] { "HoldId", "Class", "Student", "NID", "Status", "ExpiresAt", "TransactionRef", "Guardian", "GuardianPhone" }
+        };
+        foreach (var h in all)
+        {
+            var payment = await payments.GetByHoldIdAsync(h.Id);
+            rows.Add(new[] {
+                h.Id, h.Class?.Name ?? "", h.Student?.FullName ?? "", h.Student?.Nid ?? "",
+                Status(h.Status, h.ExpiresAt, now),
+                h.ExpiresAt.ToString("yyyy-MM-dd HH:mm"),
+                payment?.TransactionRef ?? "", h.GuardianName ?? "", h.GuardianPhone ?? ""
+            });
+        }
+        return ToCsv(rows);
+    }
+
+    public async Task<byte[]> ExportStudentsCsvAsync()
+    {
+        var all = await students.GetAllAsync(1, int.MaxValue, null);
+        var rows = new List<string[]> { new[] { "Id", "NID", "FullName", "Phone", "Email", "Role", "CreatedAt" } };
+        foreach (var s in all)
+            rows.Add(new[] { s.Id, s.Nid, s.FullName, s.Phone ?? "", s.Email ?? "", s.Role, s.CreatedAt.ToString("yyyy-MM-dd") });
+        return ToCsv(rows);
+    }
+
+    public async Task<AnalyticsResponse> GetAnalyticsAsync()
+    {
+        var classRows = await db.Classes.AsNoTracking()
+            .Select(c => new { c.Id, c.Name, c.TotalSeats })
+            .ToListAsync();
+        var counts = await classes.GetSeatCountsAsync();
+        var seats = classRows.Select(c =>
+        {
+            counts.TryGetValue(c.Id, out var cc);
+            return new ClassSeatRow(c.Name, c.TotalSeats, cc.held, cc.confirmed,
+                Math.Max(0, c.TotalSeats - cc.held - cc.confirmed));
+        }).OrderByDescending(x => x.Total).ToList();
+
+        var byStatus = await db.Holds.AsNoTracking()
+            .GroupBy(h => h.Status)
+            .Select(g => new { Status = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.Status, x => x.Count);
+
+        var byMethod = await db.Payments.AsNoTracking()
+            .Where(p => p.Status == PaymentStatus.Completed)
+            .GroupBy(p => p.Method)
+            .Select(g => new { Method = g.Key, Total = g.Sum(p => p.Amount) })
+            .ToDictionaryAsync(x => x.Method, x => x.Total);
+
+        return new AnalyticsResponse(seats, byStatus, byMethod);
     }
 }
