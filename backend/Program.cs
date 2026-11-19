@@ -42,6 +42,7 @@ builder.Services.AddScoped<IAdmissionService, AdmissionService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IApplicationFormService, ApplicationFormService>();
 builder.Services.AddScoped<IReceiptService, ReceiptService>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddHostedService<ExpiredHoldSweeper>();
 
 // ── MVC / OpenAPI / health ───────────────────────────────────────────────────

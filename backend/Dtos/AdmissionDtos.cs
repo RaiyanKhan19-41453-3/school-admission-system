@@ -114,6 +114,13 @@ public record AnalyticsResponse(
 
 public record ClassSeatRow(string ClassName, int Total, int Held, int Confirmed, int Available);
 
+// ── Notifications ────────────────────────────────────────────────────────────
+public record NotificationResponse(
+    string Id, string Type, string Title, string Message,
+    string? HoldId, bool IsRead, DateTime CreatedAt);
+
+public record NotificationListResponse(List<NotificationResponse> Items, int UnreadCount);
+
 // ── Shared ───────────────────────────────────────────────────────────────────
 public record PagedResponse<T>(IReadOnlyList<T> Items, int Page, int PageSize, int Total);
 public record ErrorResponse(string Code, string Message);

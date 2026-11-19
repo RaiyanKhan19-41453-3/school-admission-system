@@ -3,6 +3,7 @@ import { useDisclosure } from '@mantine/hooks'
 import { IconSchool, IconLogout, IconMoon, IconSun } from '@tabler/icons-react'
 import { Link, NavLink as RouterNavLink, useNavigate } from 'react-router-dom'
 import { getToken, setToken, apiFetch } from '../api.js'
+import NotificationBell from './NotificationBell.jsx'
 
 export default function Layout({ profile, setProfile, onLogout, children }) {
   const [opened, { toggle }] = useDisclosure()
@@ -32,6 +33,7 @@ export default function Layout({ profile, setProfile, onLogout, children }) {
           <Group>
             {token && <Badge color={profile?.role === 'Admin' ? 'grape' : 'blue'} variant="light">{profile?.role}</Badge>}
             {token && <Text size="sm" c="dimmed" visibleFrom="sm">{profile?.fullName}</Text>}
+            {token && <NotificationBell />}
             <ActionIcon variant="subtle" onClick={toggleColorScheme} aria-label="Toggle color scheme">
               {colorScheme === 'dark' ? <IconSun size={18} /> : <IconMoon size={18} />}
             </ActionIcon>

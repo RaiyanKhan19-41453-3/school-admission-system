@@ -11,6 +11,7 @@ public class AdmissionDbContext(DbContextOptions<AdmissionDbContext> options) : 
     public DbSet<Hold> Holds => Set<Hold>();
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<ApplicationDocument> Documents => Set<ApplicationDocument>();
+    public DbSet<Notification> Notifications => Set<Notification>();
 
     protected override void OnModelCreating(ModelBuilder mb)
     {
@@ -73,6 +74,17 @@ public class AdmissionDbContext(DbContextOptions<AdmissionDbContext> options) : 
             e.Property(x => x.StoredName).HasMaxLength(255);
             e.HasOne(x => x.Hold).WithMany(h => h.Documents)
              .HasForeignKey(x => x.HoldId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        mb.Entity<Notification>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.StudentId, x.IsRead, x.CreatedAt });
+            e.Property(x => x.Type).HasMaxLength(30);
+            e.Property(x => x.Title).HasMaxLength(150);
+            e.Property(x => x.Message).HasMaxLength(500);
+            e.HasOne(x => x.Student).WithMany()
+             .HasForeignKey(x => x.StudentId).OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

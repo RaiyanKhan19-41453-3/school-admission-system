@@ -15,6 +15,7 @@ public sealed class AdmissionService(
     IStudentRepository students,
     IHoldRepository holds,
     IPaymentRepository payments,
+    INotificationService notifications,
     ILogger<AdmissionService> logger) : IAdmissionService
 {
     static string NewId(string p) => p + Guid.NewGuid().ToString("N")[0..12].ToLowerInvariant();
@@ -162,6 +163,10 @@ public sealed class AdmissionService(
             await db.SaveChangesAsync();
             await tx.CommitAsync();
 
+            await notifications.NotifyAsync(student.Id, NotificationType.HoldCreated,
+                "Application submitted",
+                "Your seat is held. Pay the admission fee before it expires.", hold.Id);
+
             return new HoldResponse(hold.Id, classId, nid, hold.Status, hold.ExpiresAt, null);
         }
         catch (Exception)
@@ -215,6 +220,11 @@ public sealed class AdmissionService(
         hold.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
 
+        await notifications.NotifyAsync(hold.StudentId, NotificationType.PaymentConfirmed,
+            "Admission confirmed",
+            "Your payment was recorded and your admission is confirmed. Download your receipt from My applications.",
+            hold.Id);
+
         return new HoldResponse(hold.Id, hold.ClassId, nid, HoldStatus.Confirmed, hold.ExpiresAt, hold.ConfirmedAt);
     }
 
@@ -233,6 +243,8 @@ public sealed class AdmissionService(
             hold.CancelledAt = DateTime.UtcNow;
             hold.UpdatedAt = DateTime.UtcNow;
             await db.SaveChangesAsync();
+            await notifications.NotifyAsync(hold.StudentId, NotificationType.Cancelled,
+                "Application cancelled", "You cancelled this application; the seat is now free.", hold.Id);
         }
         return true;
     }
