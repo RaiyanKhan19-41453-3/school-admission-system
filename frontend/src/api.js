@@ -1,19 +1,28 @@
 export const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:8080').replace(/\/$/, '')
 
+const TOKEN_KEY = 'admissions.token'
+
+export function getToken() { return localStorage.getItem(TOKEN_KEY) }
+export function setToken(t) { t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY) }
+
 export function friendlyMessage(err) {
-  if (err?.code === 'NO_SEATS') return 'No seats are available — this class is full.'
-  if (err?.code === 'DUPLICATE_ACTIVE_HOLD') return 'You already have an active or confirmed application for this class.'
-  if (err?.code === 'EXPIRED') return 'Your application has expired. Please apply again.'
-  if (err?.code === 'CANCELLED') return 'This application was cancelled.'
-  if (err?.code === 'FORBIDDEN') return 'This application belongs to another student.'
-  if (err?.code === 'NOT_FOUND') return 'The class or application could not be found.'
+  const map = {
+    NO_SEATS: 'No seats are available — this class is full.',
+    DUPLICATE_ACTIVE_HOLD: 'You already have an active application or confirmed admission for this class.',
+    EXPIRED: 'Your application has expired. Please apply again.',
+    CANCELLED: 'This application was cancelled.',
+    FORBIDDEN: 'This application belongs to another student.',
+    NOT_FOUND: 'The class or application could not be found.',
+    NID_EXISTS: 'An account with this NID already exists.',
+  }
+  if (err?.code && map[err.code]) return map[err.code]
   if (err?.message?.startsWith('SERVER')) return 'Server error. Please try again in a moment.'
   return err?.message || 'Something went wrong. Please try again.'
 }
 
-export async function apiFetch(path, { method = 'GET', studentId, body } = {}) {
+export async function apiFetch(path, { method = 'GET', body, token = getToken() } = {}) {
   const headers = { 'Content-Type': 'application/json' }
-  if (studentId) headers['X-Student-Id'] = studentId
+  if (token) headers['Authorization'] = 'Bearer ' + token
   let res
   try {
     res = await fetch(`${API_BASE}${path}`, { method, headers, body: body ? JSON.stringify(body) : undefined })

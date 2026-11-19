@@ -1,6 +1,9 @@
 using System.Net;
 using System.Net.Http.Json;
+using Admissions.Data;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 using Testcontainers.PostgreSql;
 using Xunit;
@@ -16,6 +19,7 @@ namespace Admissions.Tests;
 public class AdmissionsTests : IClassFixture<AdmissionsFixture>, IDisposable
 {
     private readonly HttpClient _http;
+    private readonly WebApplicationFactory<Program> _factory;
 
     public AdmissionsTests(AdmissionsFixture fixture)
     {
@@ -24,7 +28,13 @@ public class AdmissionsTests : IClassFixture<AdmissionsFixture>, IDisposable
         Environment.SetEnvironmentVariable("DATABASE_URL", fixture.ConnectionString);
         Environment.SetEnvironmentVariable("HOLD_DURATION_SECONDS", "600");
         var factory = new WebApplicationFactory<Program>();
+        _factory = factory;
         _http = factory.CreateClient();
+
+        // Ensure schema exists in the test DB (app startup normally does this,
+        // but be explicit so external DBs work too).
+        using var scope = factory.Services.CreateScope();
+        scope.ServiceProvider.GetRequiredService<AdmissionDbContext>().Database.Migrate();
     }
 
     public void Dispose() => _http.Dispose();
@@ -124,11 +134,15 @@ public class AdmissionsTests : IClassFixture<AdmissionsFixture>, IDisposable
         string cs;
         try { cs = new NpgsqlConnectionStringBuilder(rawCs).ConnectionString; }
         catch { cs = ParseUrl(rawCs); }
-        await using var conn = new NpgsqlConnection(cs);
-        await conn.OpenAsync();
-        await using var cmd = new NpgsqlCommand("UPDATE holds SET expires_at = now() - interval '1 second' WHERE id=@id", conn);
-        cmd.Parameters.AddWithValue("id", hold!.HoldId);
-        await cmd.ExecuteNonQueryAsync();
+        // Force expiry via EF Core (table name handled by EF, no raw SQL casing issues)
+        using var scope = _factory.Services.CreateScope();
+        var testDb = scope.ServiceProvider.GetRequiredService<AdmissionDbContext>();
+        var entity = await testDb.Holds.FindAsync(hold!.HoldId);
+        if (entity is not null)
+        {
+            entity.ExpiresAt = DateTime.UtcNow.AddSeconds(-1);
+            await testDb.SaveChangesAsync();
+        }
 
         var me = new HttpRequestMessage(HttpMethod.Get, "/me/holds");
         me.Headers.Add("X-Student-Id", student);

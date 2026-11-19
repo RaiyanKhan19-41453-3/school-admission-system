@@ -12,13 +12,12 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
-    # optional host port (uncomment to connect with psql/pgAdmin)
-    # ports: ["5432:5432"]
 
   backend:
     build: ./backend
     environment:
-      DATABASE_URL: postgres://postgres:postgres@db:5432/admissions
+      ConnectionStrings__DefaultConnection: Host=db;Port=5432;Database=admissions;Username=postgres;Password=postgres
+      Jwt__Key: ${JWT_KEY:-dev-only-key-change-in-production-32chars-minimum}
       HOLD_DURATION_SECONDS: ${HOLD_DURATION_SECONDS:-600}
       ASPNETCORE_ENVIRONMENT: Production
     ports:
@@ -27,7 +26,7 @@ services:
       db:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/8080' || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 20
