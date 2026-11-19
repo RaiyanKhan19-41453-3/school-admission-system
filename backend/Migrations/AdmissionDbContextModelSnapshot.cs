@@ -54,10 +54,55 @@ namespace Admissions.Migrations
                     b.ToTable("AcademicYears");
                 });
 
+            modelBuilder.Entity("Admissions.Models.ApplicationDocument", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("DocumentType")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<long>("FileSize")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("HoldId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("StoredName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<DateTime>("UploadedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("HoldId");
+
+                    b.ToTable("Documents");
+                });
+
             modelBuilder.Entity("Admissions.Models.Hold", b =>
                 {
                     b.Property<string>("Id")
                         .HasColumnType("text");
+
+                    b.Property<string>("Address")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
 
                     b.Property<DateTime?>("CancelledAt")
                         .HasColumnType("timestamp with time zone");
@@ -72,8 +117,29 @@ namespace Admissions.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTime?>("DateOfBirth")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("DetailsSubmitted")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("DetailsSubmittedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTime>("ExpiresAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("GuardianName")
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<string>("GuardianPhone")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("PreviousSchool")
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -225,6 +291,17 @@ namespace Admissions.Migrations
                     b.ToTable("Students");
                 });
 
+            modelBuilder.Entity("Admissions.Models.ApplicationDocument", b =>
+                {
+                    b.HasOne("Admissions.Models.Hold", "Hold")
+                        .WithMany("Documents")
+                        .HasForeignKey("HoldId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Hold");
+                });
+
             modelBuilder.Entity("Admissions.Models.Hold", b =>
                 {
                     b.HasOne("Admissions.Models.SchoolClass", "Class")
@@ -273,6 +350,8 @@ namespace Admissions.Migrations
 
             modelBuilder.Entity("Admissions.Models.Hold", b =>
                 {
+                    b.Navigation("Documents");
+
                     b.Navigation("Payment");
                 });
 

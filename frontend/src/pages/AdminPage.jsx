@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
   Title, Text, Tabs, SimpleGrid, Paper, Group, Badge, Button, Table,
-  TextInput, NumberInput, Alert, Stack, Progress, ThemeIcon,
+  TextInput, NumberInput, Alert, Stack, Modal, Divider,
 } from '@mantine/core'
 import {
   IconChartBar, IconCalendar, IconBook2, IconList, IconUsers, IconCheck,
@@ -28,6 +28,8 @@ export default function AdminPage() {
   const [form, setForm] = useState({})
   const [banner, setBanner] = useState('')
   const [notice, setNotice] = useState('')
+  const [detailFor, setDetailFor] = useState(null)
+  const [detail, setDetail] = useState(null)
 
   const endpoint = {
     overview: '/api/admin/dashboard', years: '/api/admin/years',
@@ -139,13 +141,18 @@ export default function AdminPage() {
           <Paper withBorder radius="md" p="md">
             <Title order={4} mb="sm">All applications ({apps?.total ?? 0})</Title>
             <Table striped highlightOnHover>
-              <Table.Thead><Table.Tr><Table.Th>Class</Table.Th><Table.Th>Student</Table.Th><Table.Th>NID</Table.Th><Table.Th>Status</Table.Th><Table.Th>Ref</Table.Th></Table.Tr></Table.Thead>
+              <Table.Thead><Table.Tr><Table.Th>Class</Table.Th><Table.Th>Student</Table.Th><Table.Th>NID</Table.Th><Table.Th>Status</Table.Th><Table.Th>Ref</Table.Th><Table.Th></Table.Th></Table.Tr></Table.Thead>
               <Table.Tbody>
                 {(apps?.items || []).map(a => (
                   <Table.Tr key={a.holdId}>
                     <Table.Td>{a.className}</Table.Td><Table.Td>{a.studentName}</Table.Td><Table.Td>{a.studentNid}</Table.Td>
                     <Table.Td><Badge color={{ HELD: 'yellow', CONFIRMED: 'green', EXPIRED: 'red', CANCELLED: 'gray' }[a.status]}>{a.status}</Badge></Table.Td>
                     <Table.Td>{a.transactionRef || '-'}</Table.Td>
+                    <Table.Td><Button size="xs" variant="light" onClick={async () => {
+                      setDetailFor(a.holdId)
+                      try { setDetail(await apiFetch(`/api/admin/applications/${a.holdId}/details`)) }
+                      catch (e) { setBanner(friendlyMessage(e)) }
+                    }}>View</Button></Table.Td>
                   </Table.Tr>
                 ))}
               </Table.Tbody>
@@ -169,6 +176,22 @@ export default function AdminPage() {
           </Paper>
         </Tabs.Panel>
       </Tabs>
+
+      <Modal opened={!!detailFor} onClose={() => { setDetailFor(null); setDetail(null) }}
+        title="Application details" size="lg" centered>
+        {!detail ? <Text c="dimmed">Loading…</Text> : <Stack gap="sm">
+          <Group><Badge color="blue">{detail.className}</Badge><Badge>{detail.status}</Badge></Group>
+          <Text><b>Student:</b> {detail.studentName} ({detail.studentNid})</Text>
+          <Divider label="Admission form" labelPosition="left" />
+          <Text><b>Date of birth:</b> {detail.dateOfBirth ? new Date(detail.dateOfBirth).toLocaleDateString() : '-'}</Text>
+          <Text><b>Guardian:</b> {detail.guardianName || '-'} · {detail.guardianPhone || '-'}</Text>
+          <Text><b>Address:</b> {detail.address || '-'}</Text>
+          <Text><b>Previous school:</b> {detail.previousSchool || '-'}</Text>
+          <Divider label="Documents" labelPosition="left" />
+          {detail.documents.length === 0 ? <Text c="dimmed">No documents.</Text> :
+            detail.documents.map(d => <Text key={d.id}><b>{d.documentType}:</b> {d.fileName}</Text>)}
+        </Stack>}
+      </Modal>
     </Stack>
   )
 }

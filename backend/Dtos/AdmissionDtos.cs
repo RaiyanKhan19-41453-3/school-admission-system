@@ -89,6 +89,24 @@ public record DashboardResponse(
     int HeldApplications, int ConfirmedApplications, int ExpiredApplications,
     int TotalStudents, decimal RevenueCollected);
 
+// ── Admission form ───────────────────────────────────────────────────────────
+public record SubmitDetailsRequest(
+    DateTime DateOfBirth,
+    string GuardianName,
+    string GuardianPhone,
+    string? Address,
+    string? PreviousSchool);
+
+public record ApplicationDetailResponse(
+    string HoldId, string ClassName, string StudentName, string StudentNid,
+    string Status, DateTime ExpiresAt,
+    DateTime? DateOfBirth, string? GuardianName, string? GuardianPhone,
+    string? Address, string? PreviousSchool, bool DetailsSubmitted,
+    List<DocumentResponse> Documents);
+
+public record DocumentResponse(
+    string Id, string DocumentType, string FileName, long FileSize, DateTime UploadedAt);
+
 // ── Shared ───────────────────────────────────────────────────────────────────
 public record PagedResponse<T>(IReadOnlyList<T> Items, int Page, int PageSize, int Total);
 public record ErrorResponse(string Code, string Message);

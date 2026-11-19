@@ -40,6 +40,7 @@ builder.Services.AddScoped<IHoldRepository, HoldRepository>();
 builder.Services.AddScoped<IPaymentRepository, PaymentRepository>();
 builder.Services.AddScoped<IAdmissionService, AdmissionService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IApplicationFormService, ApplicationFormService>();
 builder.Services.AddHostedService<ExpiredHoldSweeper>();
 
 // ── MVC / OpenAPI / health ───────────────────────────────────────────────────
@@ -93,6 +94,7 @@ using (var scope = app.Services.CreateScope())
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.MapOpenApi();
 app.UseCors();
+app.UseStaticFiles();   // uploads served under /uploads if ever needed directly
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();

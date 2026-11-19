@@ -19,7 +19,10 @@ services:
       ConnectionStrings__DefaultConnection: Host=db;Port=5432;Database=admissions;Username=postgres;Password=postgres
       Jwt__Key: ${JWT_KEY:-dev-only-key-change-in-production-32chars-minimum}
       HOLD_DURATION_SECONDS: ${HOLD_DURATION_SECONDS:-600}
+      UPLOAD_DIR: /app/uploads
       ASPNETCORE_ENVIRONMENT: Production
+    volumes:
+      - uploads_data:/app/uploads
     ports:
       - "${BACKEND_PORT:-8080}:8080"
     depends_on:
@@ -43,3 +46,4 @@ services:
 
 volumes:
   db_data:
+  uploads_data:

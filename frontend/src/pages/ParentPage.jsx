@@ -8,6 +8,7 @@ import {
   IconInfoCircle, IconDeviceMobile,
 } from '@tabler/icons-react'
 import { apiFetch, friendlyMessage } from '../api.js'
+import ApplicationFormModal from '../components/ApplicationFormModal.jsx'
 
 function useNow() {
   const [now, setNow] = useState(Date.now())
@@ -27,6 +28,7 @@ export default function ParentPage() {
   const [busy, setBusy] = useState(false)
   const [payFor, setPayFor] = useState(null)
   const [pay, setPay] = useState({ method: 'BKASH', transactionRef: '' })
+  const [formFor, setFormFor] = useState(null)
 
   const load = async () => {
     try {
@@ -111,6 +113,8 @@ export default function ParentPage() {
                     </Text>
                   </div>
                   <Group>
+                    <Button size="sm" variant="light" leftSection={<IconInfoCircle size={15} />}
+                      onClick={() => setFormFor(a.holdId)}>Application form</Button>
                     {st === 'HELD' && <Button size="sm" leftSection={<IconCash size={15} />}
                       disabled={busy || sec <= 0} onClick={() => setPayFor(a.holdId)}>Pay fee</Button>}
                     {['HELD', 'CONFIRMED'].includes(st) && <Button size="sm" variant="light" color="red"
@@ -137,6 +141,8 @@ export default function ParentPage() {
           </Group>
         </Paper>
       )}
+      {formFor && <ApplicationFormModal holdId={formFor} opened={!!formFor}
+        onClose={() => setFormFor(null)} onSaved={load} />}
     </Stack>
   )
 }

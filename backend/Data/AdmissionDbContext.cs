@@ -10,6 +10,7 @@ public class AdmissionDbContext(DbContextOptions<AdmissionDbContext> options) : 
     public DbSet<Student> Students => Set<Student>();
     public DbSet<Hold> Holds => Set<Hold>();
     public DbSet<Payment> Payments => Set<Payment>();
+    public DbSet<ApplicationDocument> Documents => Set<ApplicationDocument>();
 
     protected override void OnModelCreating(ModelBuilder mb)
     {
@@ -61,6 +62,17 @@ public class AdmissionDbContext(DbContextOptions<AdmissionDbContext> options) : 
             e.HasIndex(x => x.HoldId).IsUnique();   // one payment per application
             e.Property(x => x.Amount).HasPrecision(18, 2);
             e.Property(x => x.Status).HasMaxLength(16);
+        });
+
+        mb.Entity<ApplicationDocument>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.HoldId);
+            e.Property(x => x.DocumentType).HasMaxLength(40);
+            e.Property(x => x.FileName).HasMaxLength(255);
+            e.Property(x => x.StoredName).HasMaxLength(255);
+            e.HasOne(x => x.Hold).WithMany(h => h.Documents)
+             .HasForeignKey(x => x.HoldId).OnDelete(DeleteBehavior.Cascade);
         });
     }
 }
