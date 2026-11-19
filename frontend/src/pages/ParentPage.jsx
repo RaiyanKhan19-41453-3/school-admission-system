@@ -7,7 +7,7 @@ import {
   IconBook2, IconCalendarEvent, IconCash, IconCheck, IconX, IconClock,
   IconInfoCircle, IconDeviceMobile,
 } from '@tabler/icons-react'
-import { apiFetch, friendlyMessage } from '../api.js'
+import { apiFetch, friendlyMessage, API_BASE, getToken } from '../api.js'
 import ApplicationFormModal from '../components/ApplicationFormModal.jsx'
 
 function useNow() {
@@ -119,6 +119,9 @@ export default function ParentPage() {
                       disabled={busy || sec <= 0} onClick={() => setPayFor(a.holdId)}>Pay fee</Button>}
                     {['HELD', 'CONFIRMED'].includes(st) && <Button size="sm" variant="light" color="red"
                       leftSection={<IconX size={15} />} disabled={busy} onClick={() => cancel(a.holdId)}>Cancel</Button>}
+                    {st === 'CONFIRMED' && <Button size="sm" variant="light" color="green" component="a"
+                      href={`${API_BASE}/api/applications/${a.holdId}/receipt?token=${encodeURIComponent(getToken() || '')}`}
+                      target="_blank" rel="noopener">Download receipt</Button>}
                   </Group>
                 </Group>
               </Paper>
