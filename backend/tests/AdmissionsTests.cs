@@ -16,6 +16,7 @@ namespace Admissions.Tests;
 /// unique class/hold prefix. DATABASE_URL env, if set, is honoured
 /// (useful in CI where postgres is provided externally).
 /// </summary>
+[Collection("Integration")]
 public class AdmissionsTests : IClassFixture<AdmissionsFixture>, IDisposable
 {
     private readonly HttpClient _http;
@@ -101,7 +102,7 @@ public class AdmissionsTests : IClassFixture<AdmissionsFixture>, IDisposable
         Assert.Equal(HttpStatusCode.OK, (await ConfirmAsync(hold.HoldId, student)).StatusCode);
 
         var list = await _http.GetFromJsonAsync<List<ClassDto>>("/classes");
-        var c = Assert.Single(list!.Where(x => x.Id == classId));
+        var c = Assert.Single(list!, x => x.Id == classId);
         Assert.Equal(1, c.ConfirmedSeats);
         Assert.Equal(0, c.HeldSeats);
         Assert.Equal(4, c.AvailableSeats);
@@ -152,7 +153,7 @@ public class AdmissionsTests : IClassFixture<AdmissionsFixture>, IDisposable
         Assert.Equal(HttpStatusCode.Conflict, (await ConfirmAsync(hold.HoldId, student)).StatusCode);
 
         var list = await _http.GetFromJsonAsync<List<ClassDto>>("/classes");
-        var c = Assert.Single(list!.Where(x => x.Id == classId));
+        var c = Assert.Single(list!, x => x.Id == classId);
         Assert.Equal(1, c.AvailableSeats);
     }
 
@@ -172,7 +173,7 @@ public class AdmissionsTests : IClassFixture<AdmissionsFixture>, IDisposable
         Assert.Equal(25, conflicts);
 
         var list = await _http.GetFromJsonAsync<List<ClassDto>>("/classes");
-        var c = Assert.Single(list!.Where(x => x.Id == classId));
+        var c = Assert.Single(list!, x => x.Id == classId);
         Assert.Equal(5, c.HeldSeats);
         Assert.Equal(0, c.AvailableSeats);
         Assert.True(c.HeldSeats + c.ConfirmedSeats <= c.TotalSeats);
