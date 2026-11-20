@@ -38,13 +38,15 @@ public sealed class AdmissionService(
 
     public async Task<YearResponse> CreateYearAsync(CreateYearRequest req)
     {
-        if (req.EndDate <= req.StartDate) throw new ValidationException("EndDate must be after StartDate.");
+        var start = DateTime.SpecifyKind(req.StartDate, DateTimeKind.Utc);
+        var end = DateTime.SpecifyKind(req.EndDate, DateTimeKind.Utc);
+        if (end <= start) throw new ValidationException("EndDate must be after StartDate.");
         if (await db.AcademicYears.AnyAsync(y => y.Name == req.Name.Trim()))
             throw new ValidationException("A year with this name already exists.");
         var y = new AcademicYear
         {
             Id = NewId("y_"), Name = req.Name.Trim(),
-            StartDate = req.StartDate, EndDate = req.EndDate
+            StartDate = start, EndDate = end
         };
         await years.AddAsync(y);
         return new YearResponse(y.Id, y.Name, y.StartDate, y.EndDate, y.IsActive, 0);

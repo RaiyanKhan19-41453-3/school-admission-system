@@ -16,6 +16,7 @@ public sealed class ReceiptController(IReceiptService receipts, IConfiguration c
     string Nid => User.FindFirst("nid")?.Value ?? throw new UnauthorizedAccessException();
 
     [HttpGet("{holdId}/receipt")]
+    [AllowAnonymous] // browser download links carry ?token= instead of an Authorization header
     public async Task<IActionResult> Download(string holdId, [FromQuery] string? token = null)
     {
         string? nid;
@@ -40,9 +41,10 @@ public sealed class ReceiptController(IReceiptService receipts, IConfiguration c
         else
         {
             // Standard Bearer header — already validated by the auth middleware.
-            nid = Nid;
+            nid = User.FindFirst("nid")?.Value;
         }
-        if (string.IsNullOrWhiteSpace(nid)) return Unauthorized();
+        if (string.IsNullOrWhiteSpace(nid))
+            return Unauthorized(new { error = "UNAUTHORIZED", message = "Sign in to download your receipt." });
 
         var (bytes, fileName) = await receipts.GenerateAsync(holdId, nid);
         return File(bytes, "application/pdf", fileName);
