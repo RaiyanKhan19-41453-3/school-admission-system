@@ -153,21 +153,22 @@ public sealed class AdmissionService(
             var occupied = await holds.CountOccupiedAsync(classId);
             if (occupied >= cls.TotalSeats) { await tx.RollbackAsync(); throw new ConflictException("NO_SEATS", "No seats are available for this class."); }
 
-            var hold = new Hold
-            {
-                Id = NewId("h_"), ClassId = classId, StudentId = student.Id,
-                Status = HoldStatus.Held,
-                ExpiresAt = DateTime.UtcNow.AddSeconds(duration)
-            };
-            db.Holds.Add(hold);
-            await db.SaveChangesAsync();
+            var holdId = NewId("h_");
+            // Expiry timestamp comes from the DATABASE clock so all app instances agree.
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO "Holds" ("Id","ClassId","StudentId","Status","ExpiresAt","CreatedAt","UpdatedAt")
+                VALUES ({holdId}, {classId}, {student.Id}, 'HELD',
+                        now() + make_interval(secs => {duration}), now(), now())
+                """);
+            var expiresAt = await db.Holds
+                .Where(h => h.Id == holdId).Select(h => h.ExpiresAt).FirstAsync();
             await tx.CommitAsync();
 
             await notifications.NotifyAsync(student.Id, NotificationType.HoldCreated,
                 "Application submitted",
-                "Your seat is held. Pay the admission fee before it expires.", hold.Id);
+                "Your seat is held. Pay the admission fee before it expires.", holdId);
 
-            return new HoldResponse(hold.Id, classId, nid, hold.Status, hold.ExpiresAt, null);
+            return new HoldResponse(holdId, classId, nid, HoldStatus.Held, expiresAt, null);
         }
         catch (Exception)
         {

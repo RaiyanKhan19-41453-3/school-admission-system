@@ -4,7 +4,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Admissions.Services;
 
-/// <summary>Moves past-due HELD rows to EXPIRED and sends notifications.</summary>
+/// <summary>Moves past-due HELD rows to EXPIRED and sends notifications.
+/// All time comparisons use the DATABASE clock (now()) so multiple app instances agree.</summary>
 public sealed class ExpiredHoldSweeper(
     IServiceScopeFactory scopes,
     ILogger<ExpiredHoldSweeper> logger) : BackgroundService
@@ -20,17 +21,21 @@ public sealed class ExpiredHoldSweeper(
                 var db = scope.ServiceProvider.GetRequiredService<AdmissionDbContext>();
                 var notifications = scope.ServiceProvider.GetRequiredService<INotificationService>();
 
-                // Expire past-due holds and notify their owners
+                // Find past-due holds using DB time, and expire them in the same statement set.
                 var expired = await db.Holds
-                    .Where(h => h.Status == HoldStatus.Held && h.ExpiresAt <= DateTime.UtcNow)
+                    .FromSqlInterpolated($"""
+                        SELECT * FROM "Holds"
+                        WHERE "Status" = 'HELD' AND "ExpiresAt" <= now()
+                        """)
                     .Select(h => new { h.Id, h.StudentId })
                     .ToListAsync(stoppingToken);
+
                 if (expired.Count > 0)
                 {
-                    await db.Holds.Where(h => h.Status == HoldStatus.Held && h.ExpiresAt <= DateTime.UtcNow)
-                        .ExecuteUpdateAsync(s => s
-                            .SetProperty(h => h.Status, HoldStatus.Expired)
-                            .SetProperty(h => h.UpdatedAt, DateTime.UtcNow), stoppingToken);
+                    await db.Database.ExecuteSqlInterpolatedAsync($"""
+                        UPDATE "Holds" SET "Status" = 'EXPIRED', "UpdatedAt" = now()
+                        WHERE "Status" = 'HELD' AND "ExpiresAt" <= now()
+                        """, stoppingToken);
                     foreach (var h in expired)
                         await notifications.NotifyAsync(h.StudentId, NotificationType.Expired,
                             "Application expired",
@@ -38,7 +43,7 @@ public sealed class ExpiredHoldSweeper(
                     logger.LogInformation("Expired {Count} holds", expired.Count);
                 }
 
-                // Warn about holds expiring soon
+                // Warn about holds expiring soon (also DB-clock based)
                 await notifications.CreateExpiryWarningsAsync();
             }
             catch (Exception ex) { logger.LogWarning(ex, "Expiry sweep failed"); }

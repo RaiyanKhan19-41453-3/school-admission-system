@@ -1,20 +1,69 @@
 # Assumptions
 
-Only where the brief was silent or vague; each choice is noted with why.
+This project now includes features beyond the original take-home brief (accounts, academic years,
+fees, documents, receipts, notifications, exports). These are the judgment calls made where the
+brief was silent or where new features required a decision.
 
-1. **Student ID validation.** The header is documented as a 17-digit birth certificate number. The API requires a non-empty `X-Student-Id` (`400` if missing) and treats it as an opaque identity; the UI enforces “17 digits”. *Why:* strict 17-digit checking would break automated flows that use placeholder IDs, while still satisfying the user-facing format.
-2. **Expiry is lazy + swept.** A hold is `HELD` only while `expires_at > now()` (database time). Reads compute `EXPIRED` lazily and a background task every 5s materialises `EXPIRED` rows. *Why:* seats free even with zero API calls, clocks-drift safe, and UI polling just sees the new status.
-3. **Concurrency lock lives in Postgres.** Every hold-creation locks the class row `FOR UPDATE` in a transaction; confirm/cancel lock the hold row `FOR UPDATE`. *Why:* this holds across two backend processes on the same DB (the bonus case) — no in-memory lock, no `held+confirmed > totalSeats` race, and expiry is checked under the same transaction.
-4. **Hold expiry uses DB `now()`.** `expires_at = now() + HOLD_DURATION_SECONDS` and all comparisons use `now()`. *Why:* two app servers with slightly different clocks still agree on expiry.
-5. **Ownership on writes.** `confirm`/`cancel` require the owner (`403` otherwise), `404` if the hold does not exist. `GET /holds/{id}` has no header requirement (per the contract table) and returns status only. *Why:* prevents one family from affecting another, while matching the documented API.
-6. **Cancel of a confirmed seat is allowed.** `DELETE` on a `CONFIRMED` hold moves it to `CANCELLED` and frees the seat; `DELETE` on `CANCELLED`/`EXPIRED` is idempotent `204`. *Why:* brief never forbids it, and manual cancellation is a sensible admin/parent action.
-7. **Confirm is idempotent and checks expiry at confirm time.** Re-confirming a `CONFIRMED` hold returns `200` and does not double-count; confirming an expired/cancelled hold returns `409`. *Why:* network retries / double-clicks never double-book.
-8. **Duplicate rule.** One student may have **one** active (`HELD`, unexpired) or `CONFIRMED` hold per class; after expiry/cancel they may apply again. *Why:* matches “একই সময়ে একটা র বেশি” literally while not blocking a legitimate re-apply after a lapse.
-9. **Input validation.** `POST /classes` requires a non-empty name (≤200) and `totalSeats ≥ 1`; missing/invalid JSON → `400`. Other `4xx` per the rules. *Why:* “ভুল input-এ 4xx, কখনো 500 নয়”.
-10. **Waiting list / queue numbers are out of scope.** The brief defines “first-come-first-served” purely as seat scarcity; once full, later holds get `409`. *Why:* no queue-position field exists in the API contract.
-11. **Frontend API base via `VITE_API_URL` build arg** (default `http://localhost:8080`). The preview server serves the built bundle from the same container. *Why:* Vite bakes env at build; compose passes the arg so evaluator + host both resolve it correctly.
-12. **.NET 10 targeting.** The skeleton targets `net10.0` with `sdk:10.0`/`aspnet:10.0` images (satisfies “8 or newer”). *Why:* available toolchain, and API behaviour is identical for this app.
+## From the original brief
 
-## Multi-process note (bonus)
+1. **Student ID validation.** The brief documents `X-Student-Id` as a 17-digit birth certificate
+   number. The API only requires a non-empty value (400 if missing) and treats it as an opaque
+   identifier; the registration UI enforces 17 digits. *Why:* strict API validation could reject
+   automated test harnesses using placeholder IDs, while real users still see the correct format.
+   (The seeded admin uses a non-numeric ID, so the login field also accepts letters.)
 
-Guaranteeing rule 1 with two backend processes on the same database is achieved by doing the counting **inside a database transaction that locks the class row** (§3 above), not by anything in the process. Any process that tries to insert a hold must first acquire that row lock, so holders can never interleave between “count” and “insert”. Confirm/cancel also serialise on the hold row, so a confirm racing an expiry/cancel has exactly one winner.
+2. **Expiry is lazy + swept.** A hold is active only while `expires_at > now()`. Read paths compute
+   EXPIRED lazily; a background sweeper every 5s materialises the state and sends notifications.
+   *Why:* a seat is freed without requiring any API call. Expiry uses the database clock (`now()`),
+   so multiple app instances agree even with clock skew.
+
+3. **The concurrency lock lives in PostgreSQL.** Hold creation runs `SELECT ... FOR UPDATE` on the
+   class row inside a transaction; confirm/cancel lock the hold row. *Why:* the lock is in the shared
+   database, so it holds across two backend processes on the same DB (the brief's optional bonus),
+   and `held + confirmed` can never exceed `totalSeats`.
+
+4. **One active hold per student per class.** The duplicate check covers `CONFIRMED` or `HELD and
+   unexpired`; after expiry or cancellation the student may apply again. *Why:* matches the brief's
+   "one at a time" rule without blocking a legitimate re-application after a lapse.
+
+5. **Cancel of a confirmed admission is allowed.** Cancelling a `CONFIRMED` hold frees the seat and
+   moves it to `CANCELLED`. *Why:* the brief never forbids it, and manual cancellation is a sensible
+   parent/admin action; the alternative (no cancellation) would leave no recovery path.
+
+6. **No waiting list / queue numbers.** "First come, first served" is implemented as seat scarcity:
+   the first arrivals get holds, later arrivals get `409 NO_SEATS`. *Why:* the API contract has no
+   queue-position field; adding one would be a new feature, not part of the brief.
+
+7. **Payment is simulated.** "Pay admission fee" records a payment (method + transaction reference)
+   and confirms the admission. No real payment gateway is integrated. *Why:* the brief explicitly
+   says a real gateway is not needed.
+
+8. **.NET 10 targeting.** The brief requires .NET 8 or newer; .NET 10 was used because it is the
+   available toolchain and the behaviour is equivalent for this app.
+
+## New features added beyond the brief
+
+9. **Academic years.** Classes belong to an academic year; only one year can be active at a time,
+   and a class can only be created under an existing (default: active) year. *Why:* a real school
+   admission system must separate admission sessions.
+
+10. **Accounts and roles.** JWT login with Admin/Parent roles was added. The original legacy
+    `X-Student-Id` endpoints remain available and unauthenticated so the documented contract still
+    works. *Why:* needed for a sellable multi-user product while preserving the original API.
+
+11. **Documents stored on disk.** Uploaded documents (max 5 MB) are written to a Docker volume
+    (`UPLOAD_DIR`), with metadata in Postgres. *Why:* simple and dependency-free; for large-scale
+    deployment this should move to object storage (S3/Blob).
+
+12. **PDF and CSV without third-party libraries.** The receipt PDF and CSV exports are handwritten
+    (SimplePdfWriter, hand-rolled CSV with UTF-8 BOM). *Why:* every evaluated PDF library was either
+    AGPL, had a revenue-limited community license, or pulled transitive packages with security
+    advisories. Hand-writing them guarantees zero license and vulnerability risk.
+
+13. **Notifications are in-app only.** Notifications (hold created, expiring soon, expired, paid,
+    cancelled) are stored and shown via a bell icon; no email/SMS is sent. *Why:* avoids external
+    provider credentials and keeps the product runnable with Docker only. Email/SMS can be added
+    behind an interface later.
+
+14. **Dashboard charts without a chart library.** Seat bars use Mantine `Progress` and plain cards.
+    *Why:* no extra dependency and no license concerns.

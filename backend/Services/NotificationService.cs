@@ -71,11 +71,14 @@ public sealed class NotificationService(
     /// <summary>Called by the sweeper: warn about holds expiring in the next 2 minutes.</summary>
     public async Task CreateExpiryWarningsAsync()
     {
-        var now = DateTime.UtcNow;
-        var soon = now.AddMinutes(2);
         var candidates = await db.Holds
-            .Where(h => h.Status == HoldStatus.Held && h.ExpiresAt > now && h.ExpiresAt <= soon)
-            .Select(h => new { h.Id, h.StudentId, h.ClassId, h.ExpiresAt })
+            .FromSqlInterpolated($"""
+                SELECT * FROM "Holds"
+                WHERE "Status" = 'HELD'
+                  AND "ExpiresAt" > now()
+                  AND "ExpiresAt" <= now() + interval '2 minutes'
+                """)
+            .Select(h => new { h.Id, h.StudentId })
             .ToListAsync();
         foreach (var h in candidates)
         {

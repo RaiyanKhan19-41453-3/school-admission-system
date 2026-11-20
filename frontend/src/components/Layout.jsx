@@ -33,7 +33,7 @@ export default function Layout({ profile, setProfile, onLogout, children }) {
           <Group>
             {token && <Badge color={profile?.role === 'Admin' ? 'grape' : 'blue'} variant="light">{profile?.role}</Badge>}
             {token && <Text size="sm" c="dimmed" visibleFrom="sm">{profile?.fullName}</Text>}
-            {token && <NotificationBell />}
+            {token && profile?.role === 'Parent' && <NotificationBell />}
             <ActionIcon variant="subtle" onClick={toggleColorScheme} aria-label="Toggle color scheme">
               {colorScheme === 'dark' ? <IconSun size={18} /> : <IconMoon size={18} />}
             </ActionIcon>
