@@ -27,7 +27,7 @@ public sealed class ExpiredHoldSweeper(
                         SELECT * FROM "Holds"
                         WHERE "Status" = 'HELD' AND "ExpiresAt" <= now()
                         """)
-                    .Select(h => new { h.Id, h.StudentId })
+                    .Select(h => new { h.Id, h.StudentId, h.ClassId })
                     .ToListAsync(stoppingToken);
 
                 if (expired.Count > 0)
@@ -36,6 +36,12 @@ public sealed class ExpiredHoldSweeper(
                         UPDATE "Holds" SET "Status" = 'EXPIRED', "UpdatedAt" = now()
                         WHERE "Status" = 'HELD' AND "ExpiresAt" <= now()
                         """, stoppingToken);
+                    // Restore each expired seat to the atomic counter
+                    foreach (var h in expired)
+                        await db.Database.ExecuteSqlInterpolatedAsync($"""
+                            UPDATE "Classes" SET "SeatsRemaining" = "SeatsRemaining" + 1
+                            WHERE "Id" = {h.ClassId}
+                            """, stoppingToken);
                     foreach (var h in expired)
                         await notifications.NotifyAsync(h.StudentId, NotificationType.Expired,
                             "Application expired",

@@ -94,7 +94,8 @@ public sealed class AdmissionService(
         {
             Id = NewId("c_"), AcademicYearId = yearId,
             Name = req.Name.Trim(), Shift = req.Shift?.Trim(), Grade = req.Grade?.Trim(),
-            TotalSeats = req.TotalSeats, FeeAmount = req.FeeAmount,
+            TotalSeats = req.TotalSeats, SeatsRemaining = req.TotalSeats,
+            FeeAmount = req.FeeAmount,
             IsActive = true
         };
         await classes.AddAsync(c);
@@ -133,50 +134,52 @@ public sealed class AdmissionService(
         return s;
     }
 
-    // ── apply: the critical concurrency path ────────────────────────────────
+    // ── apply: atomic-counter claim (no FOR UPDATE row lock) ─────────────────
     public async Task<HoldResponse> ApplyAsync(string classId, string nid)
     {
         var duration = int.TryParse(Environment.GetEnvironmentVariable("HOLD_DURATION_SECONDS"), out var v) && v >= 1
             ? v : 600;
 
-        await using var tx = await db.Database.BeginTransactionAsync();
-        try
+        // 1. Class existence / active check (read-only, no lock)
+        var cls = await classes.GetByIdAsync(classId);
+        if (cls is null) throw new NotFoundException("Class not found.");
+        if (!cls.IsActive) throw new ValidationException("Class is not active.");
+
+        var student = await ResolveStudentAsync(nid);
+
+        // 2. Duplicate guard (one active/confirmed per student per class)
+        var dup = await holds.CountActiveByStudentAsync(classId, student.Id);
+        if (dup > 0)
+            throw new ConflictException("DUPLICATE_ACTIVE_HOLD", "You already have an active application or confirmed admission for this class.");
+
+        // 3. ATOMIC CLAIM — single statement, no lock, no transaction.
+        // Postgres serialises writes to the row; seats_remaining can never go negative.
+        var claimed = await db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE "Classes" SET "SeatsRemaining" = "SeatsRemaining" - 1
+            WHERE "Id" = {classId} AND "SeatsRemaining" > 0
+            """);
+        if (claimed == 0)
         {
-            // Row lock: serialises all hold writers for this class, across processes.
-            var cls = await db.Classes.FromSqlInterpolated(
-                $"SELECT * FROM \"Classes\" WHERE \"Id\" = {classId} FOR UPDATE").FirstOrDefaultAsync();
-            if (cls is null) { await tx.RollbackAsync(); throw new NotFoundException("Class not found."); }
-            if (!cls.IsActive) { await tx.RollbackAsync(); throw new ValidationException("Class is not active."); }
-
-            var student = await ResolveStudentAsync(nid);
-            var dup = await holds.CountActiveByStudentAsync(classId, student.Id);
-            if (dup > 0) { await tx.RollbackAsync(); throw new ConflictException("DUPLICATE_ACTIVE_HOLD", "You already have an active application or confirmed admission for this class."); }
-
-            var occupied = await holds.CountOccupiedAsync(classId);
-            if (occupied >= cls.TotalSeats) { await tx.RollbackAsync(); throw new ConflictException("NO_SEATS", "No seats are available for this class."); }
-
-            var holdId = NewId("h_");
-            // Expiry timestamp comes from the DATABASE clock so all app instances agree.
-            await db.Database.ExecuteSqlInterpolatedAsync($"""
-                INSERT INTO "Holds" ("Id","ClassId","StudentId","Status","ExpiresAt","CreatedAt","UpdatedAt")
-                VALUES ({holdId}, {classId}, {student.Id}, 'HELD',
-                        now() + make_interval(secs => {duration}), now(), now())
-                """);
-            var expiresAt = await db.Holds
-                .Where(h => h.Id == holdId).Select(h => h.ExpiresAt).FirstAsync();
-            await tx.CommitAsync();
-
-            await notifications.NotifyAsync(student.Id, NotificationType.HoldCreated,
-                "Application submitted",
-                "Your seat is held. Pay the admission fee before it expires.", holdId);
-
-            return new HoldResponse(holdId, classId, nid, HoldStatus.Held, expiresAt, null);
+            if (await classes.GetByIdAsync(classId) is null)
+                throw new NotFoundException("Class not found.");
+            throw new ConflictException("NO_SEATS", "No seats are available for this class.");
         }
-        catch (Exception)
-        {
-            try { await tx.RollbackAsync(); } catch { }
-            throw;
-        }
+
+        // 4. Claim succeeded — write the hold with DB-clock expiry.
+        var holdId = NewId("h_");
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "Holds" ("Id","ClassId","StudentId","Status","ExpiresAt","CreatedAt","UpdatedAt")
+            VALUES ({holdId}, {classId}, {student.Id}, 'HELD',
+                    now() + make_interval(secs => {duration}), now(), now())
+            """);
+        var expiresAt = await db.Holds
+            .Where(h => h.Id == holdId).Select(h => h.ExpiresAt).FirstAsync();
+
+        await notifications.NotifyAsync(student.Id, NotificationType.HoldCreated,
+            "Application submitted",
+            "Your seat is held. Pay the fee before it expires.", holdId);
+
+        return new HoldResponse(holdId, classId, nid, HoldStatus.Held, expiresAt, null);
     }
 
     public async Task<HoldResponse?> GetHoldAsync(string holdId)
@@ -246,6 +249,11 @@ public sealed class AdmissionService(
             hold.CancelledAt = DateTime.UtcNow;
             hold.UpdatedAt = DateTime.UtcNow;
             await db.SaveChangesAsync();
+            // Restore the atomically-claimed seat
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE "Classes" SET "SeatsRemaining" = "SeatsRemaining" + 1
+                WHERE "Id" = {hold.ClassId}
+                """);
             await notifications.NotifyAsync(hold.StudentId, NotificationType.Cancelled,
                 "Application cancelled", "You cancelled this application; the seat is now free.", hold.Id);
         }

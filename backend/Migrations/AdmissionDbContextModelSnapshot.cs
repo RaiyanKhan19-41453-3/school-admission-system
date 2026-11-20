@@ -268,6 +268,9 @@ namespace Admissions.Migrations
                         .HasMaxLength(120)
                         .HasColumnType("character varying(120)");
 
+                    b.Property<int>("SeatsRemaining")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Shift")
                         .HasMaxLength(40)
                         .HasColumnType("character varying(40)");

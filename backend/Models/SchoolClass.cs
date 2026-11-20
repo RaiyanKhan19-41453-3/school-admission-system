@@ -25,6 +25,9 @@ public class SchoolClass
     [Range(1, 10000)]
     public int TotalSeats { get; set; }
 
+    /// <summary>Atomic counter — decremented on hold, restored on cancel/expiry.</summary>
+    public int SeatsRemaining { get; set; }
+
     [Range(0, 1000000)]
     public decimal FeeAmount { get; set; }
 
